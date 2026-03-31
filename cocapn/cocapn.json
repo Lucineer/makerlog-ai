@@ -1,0 +1,38 @@
+{
+  "name": "makerlog-ai",
+  "version": "0.1.0",
+  "provider": {
+    "primary": "ollama",
+    "model": "codellama:7b",
+    "fallback": {
+      "provider": "deepseek",
+      "model": "deepseek-coder"
+    }
+  },
+  "permissions": {
+    "default": "ask",
+    "rules": [
+      { "tool": "file_read", "level": "allow" },
+      { "tool": "search", "level": "allow" },
+      { "tool": "git_log", "level": "allow" },
+      { "tool": "git_diff", "level": "allow" },
+      { "tool": "file_write", "level": "ask" },
+      { "tool": "shell_exec", "level": "ask" },
+      { "tool": "git_commit", "level": "ask" }
+    ]
+  },
+  "billing": {
+    "enabled": false,
+    "hourlyRate": 0,
+    "perTokenRate": 0
+  },
+  "channels": {
+    "telegram": { "enabled": false },
+    "discord": { "enabled": false }
+  },
+  "deployment": {
+    "platform": "cloudflare-workers",
+    "docker": true,
+    "local": true
+  }
+}

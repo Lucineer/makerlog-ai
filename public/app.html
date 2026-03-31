@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Makerlog AI — IDE</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-primary: #0d1117;
+      --bg-secondary: #161b22;
+      --bg-tertiary: #21262d;
+      --bg-hover: #30363d;
+      --border-color: #30363d;
+      --text-primary: #e6edf3;
+      --text-secondary: #8b949e;
+      --text-muted: #6e7681;
+      --accent-green: #3fb950;
+      --accent-blue: #58a6ff;
+      --accent-orange: #d29922;
+      --accent-red: #f85149;
+      --accent-purple: #bc8cff;
+      --accent-cyan: #39d2c0;
+      --scrollbar-thumb: #30363d;
+      --scrollbar-track: transparent;
+      --tab-active-bg: #1c2128;
+      --tab-inactive-bg: #0d1117;
+      --chat-user-bg: #1a3a2a;
+      --chat-agent-bg: #1c2128;
+      --input-bg: #0d1117;
+      --modal-overlay: rgba(0,0,0,0.6);
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      font-size: 13px;
+      color: var(--text-primary);
+      background: var(--bg-primary);
+    }
+
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+    ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 4px; }
+
+    /* ===== Top-level layout ===== */
+    #ide-container {
+      display: grid;
+      grid-template-columns: 200px 1fr 350px;
+      grid-template-rows: 1fr 150px 24px;
+      grid-template-areas:
+        "sidebar editor   chat"
+        "sidebar terminal chat"
+        "status status    status";
+      height: 100vh;
+    }
+
+    /* ===== Left Sidebar — File Tree ===== */
+    #sidebar {
+      grid-area: sidebar;
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #sidebar-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border-color);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-secondary);
+      flex-shrink: 0;
+    }
+
+    #sidebar-header button {
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 14px;
+      padding: 2px 4px;
+      border-radius: 3px;
+      line-height: 1;
+    }
+    #sidebar-header button:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+    #file-tree {
+      flex: 1;
+      overflow-y: auto;
+      padding: 4px 0;
+      user-select: none;
+    }
+
+    .tree-item {
+      display: flex;
+      align-items: center;
+      padding: 3px 8px 3px 0;
+      cursor: pointer;
+      white-space: nowrap;
+      font-size: 12.5px;
+      color: var(--text-primary);
+    }
+    .tree-item:hover { background: var(--bg-hover); }
+    .tree-item.active { background: var(--bg-tertiary); }
+
+    .tree-item .icon { width: 18px; text-align: center; flex-shrink: 0; font-size: 12px; }
+    .tree-item .icon.folder { color: var(--accent-orange); }
+    .tree-item .icon.file-js { color: var(--accent-orange); }
+    .tree-item .icon.file-ts { color: var(--accent-blue); }
+    .tree-item .icon.file-json { color: var(--accent-green); }
+    .tree-item .icon.file-md { color: var(--text-secondary); }
+    .tree-item .icon.file-css { color: var(--accent-purple); }
+    .tree-item .icon.file-html { color: var(--accent-orange); }
+    .tree-item .icon.file-default { color: var(--text-muted); }
+
+    .tree-item .chevron {
+      width: 16px;
+      text-align: center;
+      flex-shrink: 0;
+      font-size: 10px;
+      color: var(--text-muted);
+      transition: transform 0.15s;
+    }
+    .tree-item .chevron.open { transform: rotate(90deg); }
+
+    .tree-item .name { overflow: hidden; text-overflow: ellipsis; }
+
+    /* ===== Center — Editor ===== */
+    #editor-area {
+      grid-area: editor;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: var(--bg-primary);
+    }
+
+    /* Toolbar */
+    #editor-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-color);
+      flex-shrink: 0;
+    }
+
+    .toolbar-btn {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+      padding: 3px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .toolbar-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .toolbar-btn.primary { background: var(--accent-green); color: #000; border-color: var(--accent-green); }
+    .toolbar-btn.primary:hover { opacity: 0.85; }
+
+    #toolbar-spacer { flex: 1; }
+
+    /* Tab bar */
+    #tab-bar {
+      display: flex;
+      align-items: stretch;
+      background: var(--tab-inactive-bg);
+      border-bottom: 1px solid var(--border-color);
+      overflow-x: auto;
+      flex-shrink: 0;
+      min-height: 32px;
+    }
+    #tab-bar::-webkit-scrollbar { height: 0; }
+
+    .tab {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 12px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      border-right: 1px solid var(--border-color);
+      white-space: nowrap;
+      position: relative;
+      min-width: 0;
+    }
+    .tab:hover { background: var(--bg-tertiary); }
+    .tab.active {
+      background: var(--tab-active-bg);
+      color: var(--text-primary);
+      border-bottom: 2px solid var(--accent-blue);
+    }
+    .tab .tab-icon { font-size: 11px; flex-shrink: 0; }
+    .tab .tab-name { overflow: hidden; text-overflow: ellipsis; }
+    .tab .tab-close {
+      font-size: 14px;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 0 2px;
+      border-radius: 3px;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+    .tab .tab-close:hover { background: var(--accent-red); color: #fff; }
+    .tab .dirty-dot {
+      width: 6px; height: 6px;
+      background: var(--accent-orange);
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* Split view container */
+    #editor-content {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .editor-pane {
+      flex: 1;
+      overflow: auto;
+      display: flex;
+      position: relative;
+    }
+    .editor-pane + .editor-pane {
+      border-left: 2px solid var(--accent-blue);
+    }
+    .editor-pane.hidden { display: none; }
+
+    /* Code area with line numbers */
+    .code-view {
+      width: 100%;
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+      font-size: 12.5px;
+      line-height: 1.55;
+      padding: 8px 0;
+    }
+
+    .code-line {
+      display: flex;
+      min-height: 20px;
+    }
+    .code-line:hover { background: rgba(88,166,255,0.04); }
+
+    .line-number {
+      width: 50px;
+      text-align: right;
+      padding-right: 16px;
+      color: var(--text-muted);
+      user-select: none;
+      flex-shrink: 0;
+      font-size: 12px;
+    }
+    .line-content {
+      flex: 1;
+      padding-right: 16px;
+      white-space: pre;
+      overflow-x: auto;
+    }
+
+    /* Syntax highlighting tokens */
+    .tok-keyword { color: #ff7b72; }
+    .tok-string { color: #a5d6ff; }
+    .tok-number { color: #79c0ff; }
+    .tok-comment { color: #6e7681; font-style: italic; }
+    .tok-function { color: #d2a8ff; }
+    .tok-type { color: #ffa657; }
+    .tok-operator { color: #ff7b72; }
+    .tok-property { color: #79c0ff; }
+    .tok-tag { color: #7ee787; }
+    .tok-attr { color: #79c0ff; }
+    .tok-heading { color: #58a6ff; font-weight: bold; }
+    .tok-bold { font-weight: bold; }
+    .tok-italic { font-style: italic; }
+    .tok-link { color: #58a6ff; text-decoration: underline; }
+    .tok-bool { color: #79c0ff; }
+    .tok-null { color: #79c0ff; }
+    .tok-punctuation { color: #8b949e; }
+
+    /* Empty state */
+    #editor-empty {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      font-size: 14px;
+      text-align: center;
+      flex-direction: column;
+      gap: 8px;
+    }
+    #editor-empty .logo { font-size: 48px; opacity: 0.3; }
+    #editor-empty .hint { font-size: 12px; }
+
+    /* ===== Right Panel — Chat ===== */
+    #chat-panel {
+      grid-area: chat;
+      background: var(--bg-secondary);
+      border-left: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #chat-header {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    #chat-header h3 { font-size: 12px; font-weight: 600; color: var(--text-primary); }
+    #chat-header button {
+      background: none; border: none; color: var(--text-secondary);
+      cursor: pointer; font-size: 14px; padding: 2px 4px; border-radius: 3px;
+    }
+    #chat-header button:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+    #chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .chat-msg {
+      max-width: 90%;
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-size: 12.5px;
+      line-height: 1.5;
+      word-wrap: break-word;
+      white-space: pre-wrap;
+    }
+    .chat-msg.user {
+      align-self: flex-end;
+      background: #1a3a2a;
+      color: var(--accent-green);
+      border-bottom-right-radius: 2px;
+    }
+    .chat-msg.agent {
+      align-self: flex-start;
+      background: var(--chat-agent-bg);
+      color: var(--text-primary);
+      border-bottom-left-radius: 2px;
+    }
+    .chat-msg.system {
+      align-self: center;
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      font-size: 11px;
+      border-radius: 6px;
+      text-align: center;
+    }
+    .chat-msg .msg-time {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+    .chat-msg.agent .msg-time { text-align: left; }
+    .chat-msg.user .msg-time { text-align: right; }
+
+    #chat-input-area {
+      padding: 8px 10px;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    #chat-input {
+      flex: 1;
+      background: var(--input-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 8px 10px;
+      color: var(--text-primary);
+      font-size: 12.5px;
+      font-family: inherit;
+      resize: none;
+      min-height: 36px;
+      max-height: 120px;
+      outline: none;
+    }
+    #chat-input:focus { border-color: var(--accent-blue); }
+    #chat-input::placeholder { color: var(--text-muted); }
+
+    #chat-send {
+      background: var(--accent-green);
+      border: none;
+      color: #000;
+      padding: 0 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    #chat-send:hover { opacity: 0.85; }
+    #chat-send:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ===== Bottom Panel — Terminal ===== */
+    #terminal-area {
+      grid-area: terminal;
+      background: var(--bg-primary);
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #terminal-header {
+      display: flex;
+      align-items: center;
+      padding: 4px 10px;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-color);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-secondary);
+      flex-shrink: 0;
+    }
+    #terminal-header span { margin-right: 10px; }
+
+    #terminal-output {
+      flex: 1;
+      overflow-y: auto;
+      padding: 6px 10px;
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--text-secondary);
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+    .term-line { margin: 0; }
+    .term-line.error { color: var(--accent-red); }
+    .term-line.success { color: var(--accent-green); }
+    .term-line.info { color: var(--accent-blue); }
+    .term-prompt { color: var(--accent-cyan); }
+
+    #terminal-input-line {
+      display: flex;
+      align-items: center;
+      padding: 4px 10px;
+      border-top: 1px solid var(--border-color);
+      flex-shrink: 0;
+      gap: 6px;
+    }
+    #terminal-input-line .prompt-char {
+      color: var(--accent-cyan);
+      font-family: 'SF Mono', monospace;
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+    #terminal-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text-primary);
+      font-family: 'SF Mono', monospace;
+      font-size: 12px;
+      outline: none;
+    }
+
+    /* ===== Status Bar ===== */
+    #status-bar {
+      grid-area: status;
+      background: var(--bg-tertiary);
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      padding: 0 10px;
+      font-size: 11px;
+      color: var(--text-secondary);
+      gap: 16px;
+      flex-shrink: 0;
+    }
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      white-space: nowrap;
+    }
+    .status-item .dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .dot.connected { background: var(--accent-green); }
+    .dot.disconnected { background: var(--accent-red); }
+    .dot.connecting { background: var(--accent-orange); }
+    #status-spacer { flex: 1; }
+    #status-settings {
+      background: none; border: none; color: var(--text-secondary);
+      cursor: pointer; font-size: 13px; padding: 2px 4px; border-radius: 3px;
+    }
+    #status-settings:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+    /* ===== Settings Modal ===== */
+    #settings-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: var(--modal-overlay);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    #settings-modal.visible { display: flex; }
+
+    #settings-dialog {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      width: 420px;
+      max-width: 95vw;
+      box-shadow: 0 16px 48px rgba(0,0,0,0.4);
+    }
+
+    #settings-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border-color);
+    }
+    #settings-header h2 { font-size: 14px; font-weight: 600; }
+    #settings-close {
+      background: none; border: none; color: var(--text-secondary);
+      cursor: pointer; font-size: 18px; padding: 0 4px;
+    }
+    #settings-close:hover { color: var(--text-primary); }
+
+    #settings-body { padding: 18px; }
+
+    .settings-field { margin-bottom: 14px; }
+    .settings-field label {
+      display: block;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+    }
+    .settings-field input,
+    .settings-field select {
+      width: 100%;
+      background: var(--input-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 5px;
+      padding: 7px 10px;
+      color: var(--text-primary);
+      font-size: 12.5px;
+      font-family: inherit;
+      outline: none;
+    }
+    .settings-field input:focus,
+    .settings-field select:focus { border-color: var(--accent-blue); }
+
+    #settings-footer {
+      padding: 12px 18px;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    /* ===== Context Menu ===== */
+    #context-menu {
+      display: none;
+      position: fixed;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 4px 0;
+      min-width: 150px;
+      z-index: 500;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    }
+    #context-menu.visible { display: block; }
+    .ctx-item {
+      padding: 5px 14px;
+      font-size: 12px;
+      color: var(--text-primary);
+      cursor: pointer;
+    }
+    .ctx-item:hover { background: var(--bg-hover); }
+    .ctx-sep { height: 1px; background: var(--border-color); margin: 4px 0; }
+
+    /* ===== Streaming cursor ===== */
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+    .streaming-cursor::after {
+      content: '\2588';
+      animation: blink 0.8s infinite;
+      color: var(--accent-cyan);
+    }
+
+    /* ===== Resize handle ===== */
+    .resize-handle {
+      width: 4px;
+      cursor: col-resize;
+      background: transparent;
+      transition: background 0.15s;
+    }
+    .resize-handle:hover { background: var(--accent-blue); }
+
+    /* ===== Responsive ===== */
+    @media (max-width: 900px) {
+      #ide-container {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto 1fr auto auto 24px;
+        grid-template-areas:
+          "sidebar"
+          "editor"
+          "chat"
+          "terminal"
+          "status";
+      }
+      #sidebar { max-height: 200px; border-right: none; border-bottom: 1px solid var(--border-color); }
+      #chat-panel { border-left: none; border-top: 1px solid var(--border-color); max-height: 300px; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="ide-container">
+
+  <!-- ===== LEFT SIDEBAR ===== -->
+  <div id="sidebar">
+    <div id="sidebar-header">
+      <span>Explorer</span>
+      <div>
+        <button id="btn-new-file" title="New File">+&#x1F4C4;</button>
+        <button id="btn-new-folder" title="New Folder">+&#x1F4C1;</button>
+      </div>
+    </div>
+    <div id="file-tree"></div>
+  </div>
+
+  <!-- ===== CENTER EDITOR ===== -->
+  <div id="editor-area">
+    <div id="editor-toolbar">
+      <button class="toolbar-btn" id="btn-save" title="Save (Ctrl+S)">&#x1F4BE; Save</button>
+      <button class="toolbar-btn" id="btn-split" title="Toggle split view">&#x2387 Split</button>
+      <button class="toolbar-btn" id="btn-compare" title="Compare branches">&#x1F4CA Compare Branches</button>
+      <span id="toolbar-spacer"></span>
+      <span id="toolbar-file-info" style="font-size:11px;color:var(--text-muted);"></span>
+    </div>
+    <div id="tab-bar"></div>
+    <div id="editor-content">
+      <div id="editor-empty">
+        <div class="logo">&#x2604;</div>
+        <div>Makerlog AI</div>
+        <div class="hint">Select a file from the explorer to start editing</div>
+      </div>
+      <div class="editor-pane hidden" id="editor-pane-primary">
+        <div class="code-view" id="code-view-primary"></div>
+      </div>
+      <div class="editor-pane hidden" id="editor-pane-secondary">
+        <div class="code-view" id="code-view-secondary"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== RIGHT CHAT ===== -->
+  <div id="chat-panel">
+    <div id="chat-header">
+      <h3>&#x1F916; Agent Chat</h3>
+      <button id="btn-chat-clear" title="Clear chat">&#x1F5D1;</button>
+    </div>
+    <div id="chat-messages"></div>
+    <div id="chat-input-area">
+      <textarea id="chat-input" placeholder="Message the agent... (type /help for commands)" rows="1"></textarea>
+      <button id="chat-send">&#x27A4;</button>
+    </div>
+  </div>
+
+  <!-- ===== BOTTOM TERMINAL ===== -->
+  <div id="terminal-area">
+    <div id="terminal-header">
+      <span>&#x1F4BB; Terminal</span>
+    </div>
+    <div id="terminal-output"></div>
+    <div id="terminal-input-line">
+      <span class="prompt-char">$</span>
+      <input type="text" id="terminal-input" placeholder="Run a command..." autocomplete="off" spellcheck="false">
+    </div>
+  </div>
+
+  <!-- ===== STATUS BAR ===== -->
+  <div id="status-bar">
+    <div class="status-item">
+      <span class="dot disconnected" id="status-dot"></span>
+      <span id="status-connection">Disconnected</span>
+    </div>
+    <div class="status-item" id="status-provider">Provider: —</div>
+    <div class="status-item" id="status-model">Model: —</div>
+    <span id="status-spacer"></span>
+    <div class="status-item" id="status-tokens">Tokens: 0</div>
+    <div class="status-item" id="status-cost">Cost: $0.00</div>
+    <button id="status-settings" title="Settings">&#x2699;</button>
+  </div>
+</div>
+
+<!-- ===== SETTINGS MODAL ===== -->
+<div id="settings-modal">
+  <div id="settings-dialog">
+    <div id="settings-header">
+      <h2>Settings</h2>
+      <button id="settings-close">&times;</button>
+    </div>
+    <div id="settings-body">
+      <div class="settings-field">
+        <label for="setting-provider">LLM Provider</label>
+        <select id="setting-provider">
+          <option value="deepseek">DeepSeek</option>
+          <option value="openai">OpenAI</option>
+          <option value="anthropic">Anthropic</option>
+          <option value="local">Local (Ollama)</option>
+        </select>
+      </div>
+      <div class="settings-field">
+        <label for="setting-model">Model</label>
+        <input type="text" id="setting-model" placeholder="e.g. deepseek-chat, gpt-4o, claude-sonnet-4-20250514">
+      </div>
+      <div class="settings-field">
+        <label for="setting-apikey">API Key</label>
+        <input type="password" id="setting-apikey" placeholder="sk-...">
+      </div>
+      <div class="settings-field">
+        <label for="setting-endpoint">Custom Endpoint (optional)</label>
+        <input type="text" id="setting-endpoint" placeholder="http://localhost:11434">
+      </div>
+    </div>
+    <div id="settings-footer">
+      <button class="toolbar-btn" id="settings-cancel">Cancel</button>
+      <button class="toolbar-btn primary" id="settings-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== CONTEXT MENU ===== -->
+<div id="context-menu">
+  <div class="ctx-item" data-action="rename">Rename</div>
+  <div class="ctx-item" data-action="delete">Delete</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" data-action="copy-path">Copy Path</div>
+  <div class="ctx-item" data-action="copy-content">Copy Content</div>
+</div>
+
+<script src="js/app.js"></script>
+</body>
+</html>

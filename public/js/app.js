@@ -19,6 +19,9 @@
     treeData: null,
     contextTarget: null,
     terminalCollapsed: false,
+    allFiles: [],
+    paletteMode: null, // 'files' or 'commands'
+    paletteSelectedIdx: 0,
   };
 
   // ===== Utilities =====
@@ -44,6 +47,23 @@
 
   function timeStr() {
     return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function renderChatContent(text) {
+    let html = escapeHtml(text);
+    // Render inline tool calls: [tool: name(args) result]
+    html = html.replace(/\[tool:\s*(\w+)\(([^)]*)\)\s*(.*?)\]/g, (match, name, args, result) => {
+      return `<div class="chat-tool-call">`
+        + `<div class="tool-header">`
+        + `<span class="tool-name">${escapeHtml(name)}(${escapeHtml(args)})</span>`
+        + `<span class="tool-status ok">done</span>`
+        + `</div>`
+        + (result ? `<div class="tool-output">${escapeHtml(result)}</div>` : '')
+        + `</div>`;
+    });
+    // Convert newlines to <br> for non-tool text
+    html = html.replace(/\n/g, '<br>');
+    return html;
   }
 
   // ===== Syntax Highlighting =====
@@ -574,6 +594,8 @@
       }
 
       msgEl.classList.remove('streaming-cursor');
+      // Render final content with tool call formatting
+      msgEl.innerHTML = renderChatContent(agentMsg);
       // Add timestamp
       const timeEl = document.createElement('div');
       timeEl.className = 'msg-time';
@@ -587,7 +609,11 @@
       const div = document.createElement('div');
       div.className = 'chat-msg ' + role;
       if (isStreaming) div.classList.add('streaming-cursor');
-      div.textContent = text;
+      if (role === 'agent' && !isStreaming && text) {
+        div.innerHTML = renderChatContent(text);
+      } else {
+        div.textContent = text;
+      }
       if (!isStreaming && text) {
         const timeEl = document.createElement('div');
         timeEl.className = 'msg-time';
@@ -1123,6 +1149,183 @@
         }
       } catch { /* gallery fetch failed */ }
     });
+  }
+
+  // ===== Command Palette & File Search (Ctrl+Shift+P / Ctrl+P) =====
+  const COMMANDS = [
+    { id: 'save', label: 'Save File', shortcut: 'Ctrl+S', fn: () => editor.saveCurrent() },
+    { id: 'close-tab', label: 'Close Tab', shortcut: 'Ctrl+W', fn: () => { if (state.activeFile) editor.closeTab(state.activeFile); } },
+    { id: 'split', label: 'Toggle Split View', shortcut: '', fn: () => editor.toggleSplit() },
+    { id: 'compare', label: 'Compare Branches', shortcut: '', fn: () => chat.sendCommand('/compare-branches') },
+    { id: 'settings', label: 'Open Settings', shortcut: '', fn: () => { const b = $('#status-settings'); if (b) b.click(); } },
+    { id: 'vision', label: 'Open Sprite Generator', shortcut: '', fn: () => { const b = $('#status-vision'); if (b) b.click(); } },
+    { id: 'clear-chat', label: 'Clear Chat', shortcut: '', fn: () => chat.clear() },
+    { id: 'toggle-terminal', label: 'Toggle Terminal', shortcut: '', fn: () => term.toggleCollapse() },
+    { id: 'model', label: 'Change Model...', shortcut: '', fn: () => { chat.input.value = '/model '; chat.input.focus(); closePalette(); } },
+    { id: 'provider', label: 'Change Provider...', shortcut: '', fn: () => { chat.input.value = '/provider '; chat.input.focus(); closePalette(); } },
+    { id: 'new-file', label: 'New File', shortcut: '', fn: () => fileTree.promptNew('file') },
+  ];
+
+  const paletteModal = $('#command-palette-modal');
+  const paletteInput = $('#command-palette-input');
+  const paletteResults = $('#command-palette-results');
+
+  function openPalette(mode) {
+    state.paletteMode = mode;
+    state.paletteSelectedIdx = 0;
+    paletteInput.value = '';
+    if (mode === 'files') {
+      paletteInput.placeholder = 'Search files by name...';
+    } else {
+      paletteInput.placeholder = 'Type a command...';
+    }
+    paletteModal.classList.add('visible');
+    paletteInput.focus();
+    renderPaletteResults('');
+  }
+
+  function closePalette() {
+    paletteModal.classList.remove('visible');
+    state.paletteMode = null;
+  }
+
+  function renderPaletteResults(query) {
+    const q = query.toLowerCase();
+    let html = '';
+    let idx = 0;
+
+    if (state.paletteMode === 'files') {
+      const matches = state.allFiles.filter(f => f.toLowerCase().includes(q)).slice(0, 20);
+      matches.forEach((path) => {
+        const name = path.split('/').pop();
+        const dir = path.substring(0, path.lastIndexOf('/')) || '';
+        const selected = idx === state.paletteSelectedIdx ? ' palette-selected' : '';
+        html += `<div class="palette-item${selected}" data-idx="${idx}" data-path="${escapeHtml(path)}">`
+          + `<span style="color:var(--accent-blue)">${escapeHtml(name)}</span>`
+          + `<span style="color:var(--text-muted);font-size:11px;margin-left:8px;">${escapeHtml(dir)}</span>`
+          + `</div>`;
+        idx++;
+      });
+      if (!matches.length) html = '<div class="palette-empty">No files found</div>';
+    } else {
+      const matches = COMMANDS.filter(c => c.label.toLowerCase().includes(q));
+      matches.forEach((cmd) => {
+        const selected = idx === state.paletteSelectedIdx ? ' palette-selected' : '';
+        html += `<div class="palette-item${selected}" data-idx="${idx}" data-cmd="${cmd.id}">`
+          + `<span>${escapeHtml(cmd.label)}</span>`
+          + (cmd.shortcut ? `<span style="color:var(--text-muted);font-size:11px;margin-left:auto;">${escapeHtml(cmd.shortcut)}</span>` : '')
+          + `</div>`;
+        idx++;
+      });
+      if (!matches.length) html = '<div class="palette-empty">No commands found</div>';
+    }
+
+    paletteResults.innerHTML = html;
+
+    paletteResults.querySelectorAll('.palette-item').forEach((el) => {
+      el.addEventListener('click', () => {
+        executePaletteItem(el);
+      });
+    });
+  }
+
+  function executePaletteItem(el) {
+    if (state.paletteMode === 'files') {
+      const path = el.dataset.path;
+      if (path) editor.openFile(path);
+    } else {
+      const cmdId = el.dataset.cmd;
+      const cmd = COMMANDS.find(c => c.id === cmdId);
+      if (cmd) cmd.fn();
+    }
+    closePalette();
+  }
+
+  paletteInput.addEventListener('input', () => {
+    state.paletteSelectedIdx = 0;
+    renderPaletteResults(paletteInput.value);
+  });
+
+  paletteInput.addEventListener('keydown', (e) => {
+    const items = paletteResults.querySelectorAll('.palette-item');
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      state.paletteSelectedIdx = Math.min(state.paletteSelectedIdx + 1, items.length - 1);
+      renderPaletteResults(paletteInput.value);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      state.paletteSelectedIdx = Math.max(state.paletteSelectedIdx - 1, 0);
+      renderPaletteResults(paletteInput.value);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const selected = paletteResults.querySelector('.palette-selected');
+      if (selected) executePaletteItem(selected);
+    } else if (e.key === 'Escape') {
+      closePalette();
+    }
+  });
+
+  paletteModal.addEventListener('click', (e) => {
+    if (e.target === paletteModal) closePalette();
+  });
+
+  // Pre-load file list for Ctrl+P
+  async function loadFileList() {
+    try {
+      const res = await fetch('/api/files?path=');
+      const data = await res.json();
+      state.allFiles = flattenFileTree(data);
+    } catch { /* no files available */ }
+  }
+
+  function flattenFileTree(tree, prefix) {
+    prefix = prefix || '';
+    const files = [];
+    (tree.files || []).forEach(f => files.push(prefix ? prefix + '/' + f.name : f.name));
+    (tree.directories || []).forEach(d => {
+      const path = prefix ? prefix + '/' + d.name : d.name;
+      if (d.children) files.push(...flattenFileTree(d.children, path));
+    });
+    return files;
+  }
+
+  loadFileList();
+
+  // Keyboard shortcuts for palette
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'P') {
+      e.preventDefault();
+      openPalette('commands');
+    } else if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+      e.preventDefault();
+      openPalette('files');
+    }
+  });
+
+  // ===== Inline Tool Calls in Chat =====
+  const TOOL_PATTERNS = [
+    { regex: /\b(file_read|file_write|file_edit|bash|search|git_log|git_diff|git_commit)\b\(([^)]*)\)/g, type: 'tool' },
+  ];
+
+  function renderChatContent(text) {
+    let html = escapeHtml(text);
+
+    // Detect tool call patterns and render them inline
+    // Pattern: tool_name(args) — result
+    const toolBlockRegex = /(```tool\n([\s\S]*?)```)/g;
+
+    // Simple inline tool rendering: detect [tool: name(args) result]
+    html = html.replace(/\[tool:\s*(\w+)\(([^)]*)\)\s*(.*?)\]/g, (match, name, args, result) => {
+      return `<div class="chat-tool-call">`
+        + `<div class="tool-header">`
+        + `<span class="tool-name">${escapeHtml(name)}(${escapeHtml(args)})</span>`
+        + `<span class="tool-status ok">ok</span>`
+        + `</div>`
+        + `<div class="tool-output">${escapeHtml(result)}</div>`
+        + `</div>`;
+    });
+
+    return html;
   }
 
 })();

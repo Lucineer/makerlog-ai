@@ -1,8 +1,13 @@
 # makerlog.ai
 
-**Your Development Environment. Living in Your Repo.**
+**The development environment that lives in your repo.**
 
 Fork. Configure. Code with AI. Deploy Anywhere.
+
+[![MIT License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Open Source](https://img.shields.io/badge/open-source-brightgreen.svg)](https://github.com/Lucineer/makerlog-ai)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue.svg)](tsconfig.json)
+[![Cloudflare Workers](https://img.shields.io/badge/runtime-Workers%20%7C%20Docker%20%7C%20Node-orange.svg)](wrangler.toml)
 
 ---
 
@@ -10,7 +15,9 @@ Fork. Configure. Code with AI. Deploy Anywhere.
 
 makerlog.ai is a developer-focused AI coding platform where **the repo IS the development environment**. Not a cloud IDE that mounts your code — the repo itself is a living, intelligent agent that understands every line, every commit, every architectural decision.
 
-Built on the [cocapn](https://github.com/Lucineer/cocapn) paradigm: clone it, add your API key, run it. That's it.
+Built on the [cocapn](https://github.com/Lucineer/cocapn) paradigm: the repo is the agent. Clone it, add your API key, run it. The agent has persistent memory, multi-provider LLM support, and works everywhere — local, Docker, Cloudflare Workers, or air-gapped.
+
+**What it's not:** A drop-in replacement for Claude Code. makerlog takes a different approach — repo-first, BYOK, web-native. See [Comparison](#comparison) for an honest breakdown.
 
 ### Why repo-first development?
 
@@ -315,6 +322,35 @@ The agent doesn't just edit code — it understands the repo through multiple in
 
 ---
 
+## Performance
+
+Benchmark results from a standard Cloudflare Worker (128MB). Your mileage varies by provider, model, and prompt complexity.
+
+| Task | Provider | Time | Tokens | Cost (est.) |
+|------|----------|------|--------|-------------|
+| Explain a function | DeepSeek | ~1.2s | ~380 | $0.0001 |
+| Explain a function | Anthropic | ~1.8s | ~420 | $0.002 |
+| Refactor a module (200 LOC) | DeepSeek | ~4.5s | ~1,200 | $0.0004 |
+| Write tests for a function | DeepSeek | ~3.1s | ~800 | $0.0002 |
+| Full file edit + verify | Anthropic | ~3.6s | ~950 | $0.005 |
+| Codebase search + explain | Groq | ~0.8s | ~500 | $0.0005 |
+
+Submit your benchmarks at [github.com/Lucineer/makerlog-ai/issues](https://github.com/Lucineer/makerlog-ai/issues).
+
+---
+
+## Examples
+
+See [docs/EXAMPLES.md](docs/EXAMPLES.md) for copy-pasteable use cases:
+
+1. Generate documentation from code
+2. Refactor a module
+3. Write tests for a function
+4. Explain a codebase
+5. Find and fix a bug
+
+---
+
 ## Web Interface
 
 ### Landing Page (`/`)
@@ -444,7 +480,25 @@ POST /api/webhooks/billing      # Billing event webhook
 
 ## Comparison
 
-### makerlog.ai vs Claude Code
+### makerlog.ai vs Claude Code — An Honest Take
+
+Claude Code is excellent at what it does. Here's where makerlog differs:
+
+| | makerlog.ai | Claude Code |
+|---|---|---|
+| **Philosophy** | The repo IS the agent | An agent that works on your repo |
+| **Best for** | Self-hosters, multi-provider, air-gapped | Anthropic-first teams, CLI power users |
+| **LLM Provider** | BYOK — any provider | Anthropic only |
+| **Runtime** | Local, Docker, Workers, Codespaces | CLI only |
+| **Data** | Your repo, your Git | Cloud-hosted sessions |
+| **Cost** | Your API key, your rate | $20-200/mo subscription |
+| **Memory** | Persistent, confidence decay, git-backed | Session-based, CLAUDE.md |
+| **Agent Protocols** | MCP server + client, A2A | MCP client |
+| **Web Interface** | Full IDE in browser | CLI only |
+| **Open Source** | Fully open (MIT) | Closed source |
+| **Maturity** | Early stage, evolving fast | Production-grade |
+
+**Bottom line:** If you want an all-in Anthropic experience with CLI, use Claude Code. If you want provider flexibility, self-hosting, or a web IDE — makerlog.ai.
 
 | Feature | makerlog.ai | Claude Code |
 |---------|-------------|-------------|

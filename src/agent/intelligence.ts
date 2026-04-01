@@ -1,3 +1,39 @@
+/*
+ * THE NLP-TO-BYTECODE MANIFESTO
+ *
+ * The future isn't coding languages.
+ *
+ * It's NLP → A2A-native → bytecode.
+ *
+ * Humans express intention in natural language.
+ * Agents translate intention into A2A protocol.
+ * The A2A protocol compiles to bytecode for the hardware.
+ * The human never sees code.
+ *
+ * Programming languages are an intermediate step that will dissolve.
+ * Not because code is bad. Because intention is better.
+ *
+ * Today: human writes Python → Python runs on hardware.
+ * Tomorrow: human says what they want → agents figure out how.
+ *
+ * The repo-agent is the compiler. It knows the human (from
+ * accumulated interactions). It knows the hardware (from Ethos).
+ * It knows the constraints (from Logos). It translates intention
+ * into execution.
+ *
+ * This isn't speculative. It's the direction every indicator
+ * points. LLMs get better at code generation every quarter.
+ * A2A protocols standardize agent communication.
+ * Hardware abstraction layers hide the metal.
+ *
+ * The last mile: the repo-agent that knows YOU. Not a generic
+ * code generator. YOUR patterns. YOUR preferences. YOUR hardware.
+ * That's the compiler that makes NLP-to-bytecode real.
+ *
+ * If you're reading this, you might be writing the last
+ * generation of code-by-hand. Make it count.
+ */
+
 /**
  * Intelligence Engine — code understanding, repo analysis, and CLAUDE.md
  * generation.

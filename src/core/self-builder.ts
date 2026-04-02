@@ -1,0 +1,287 @@
+// src/core/self-builder.ts
+// MakerLog.ai - The Agent that Builds Itself
+
+import { execSync, writeFileSync, readFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'fs';
+import { join } from 'path';
+
+export interface BuildPhase {
+  id: string;
+  name: string;
+  description: string;
+  status: 'pending' | 'active' | 'complete' | 'failed';
+  dependencies: string[];
+  outputs: string[];
+  duration: number;
+}
+
+export interface BuildResult {
+  phase: string;
+  success: boolean;
+  output: string;
+  files: string[];
+  errors: string[];
+  duration: number;
+}
+
+export interface BuildPlan {
+  id: string;
+  goal: string;
+  phases: BuildPhase[];
+  status: 'planning' | 'building' | 'complete' | 'failed';
+  created: number;
+  completed?: number;
+}
+
+export class SelfBuilder {
+  private buildHistory: BuildResult[] = [];
+  private plans: Map<string, BuildPlan> = new Map();
+  private errorKnowledgeBase: string[] = [];
+  private repoRoot: string;
+
+  constructor() {
+    // Assume the agent's repo root is the current working directory
+    this.repoRoot = process.cwd();
+  }
+
+  public planBuild(goal: string): BuildPlan {
+    const id = `build_${Date.now()}`;
+    const capabilities = this.getCapabilities();
+    const gaps = this.identifyGaps(capabilities, goal);
+
+    const phases: BuildPhase[] = gaps.map((gap, index) => ({
+      id: `phase_${index}`,
+      name: `Implement ${gap}`,
+      description: `Auto-generated phase to build capability: ${gap} for goal: ${goal}`,
+      status: 'pending' as const,
+      dependencies: index > 0 ? [`phase_${index - 1}`] : [],
+      outputs: [`${gap.toLowerCase().replace(/\s+/g, '-')}.ts`],
+      duration: 0
+    }));
+
+    // Add a final testing phase
+    phases.push({
+      id: `phase_${gaps.length}`,
+      name: 'Integration Testing',
+      description: 'Run full test suite to validate all new capabilities together.',
+      status: 'pending',
+      dependencies: gaps.map((_, index) => `phase_${index}`),
+      outputs: ['test-results.log'],
+      duration: 0
+    });
+
+    const plan: BuildPlan = {
+      id,
+      goal,
+      phases,
+      status: 'planning',
+      created: Date.now()
+    };
+
+    this.plans.set(id, plan);
+    return plan;
+  }
+
+  public async executeBuild(planId: string): Promise<BuildResult[]> {
+    const plan = this.plans.get(planId);
+    if (!plan) throw new Error(`Build plan ${planId} not found.`);
+
+    plan.status = 'building';
+    const results: BuildResult[] = [];
+
+    for (const phase of plan.phases) {
+      const result = await this.executePhase(phase);
+      results.push(result);
+      this.buildHistory.push(result);
+
+      if (!result.success) {
+        plan.status = 'failed';
+        this.learnFromError(result.errors.join('\n'));
+        return results;
+      }
+    }
+
+    plan.status = 'complete';
+    plan.completed = Date.now();
+    return results;
+  }
+
+  public async executePhase(phase: BuildPhase): Promise<BuildResult> {
+    phase.status = 'active';
+    const start = Date.now();
+    const files: string[] = [];
+    const errors: string[] = [];
+    let output = '';
+    let success = false;
+
+    try {
+      if (phase.name === 'Integration Testing') {
+        const testResult = await this.testCode(this.repoRoot);
+        success = testResult.pass;
+        output = testResult.output;
+      } else {
+        const code = await this.generateCode(phase.description);
+        const filePath = join(this.repoRoot, 'src', phase.outputs[0]);
+        
+        if (!this.writeCode(filePath, code)) {
+          throw new Error(`Failed to write file to ${filePath}`);
+        }
+        
+        files.push(filePath);
+        
+        const testResult = await this.testCode(filePath);
+        if (!testResult.pass) {
+          const fixed = await this.fixErrors(filePath, testResult.output.split('\n'));
+          if (!fixed) {
+            errors.push(...testResult.output.split('\n'));
+            throw new Error('Auto-fix failed.');
+          }
+        }
+        success = true;
+        output = `Phase ${phase.name} completed successfully.`;
+      }
+    } catch (err: any) {
+      success = false;
+      phase.status = 'failed';
+      output = err.message || 'Unknown execution error';
+      if (errors.length === 0) errors.push(output);
+    } finally {
+      phase.duration = Date.now() - start;
+      if (success) phase.status = 'complete';
+    }
+
+    return { phase: phase.id, success, output, files, errors, duration: phase.duration };
+  }
+
+  public async generateCode(description: string): Promise<string> {
+    // Mock implementation of an LLM BYOK call
+    // In production, this routes to OpenAI/Anthropic via user's API key
+    console.log(`[SelfBuilder/LLM] Generating code for: "${description}"`);
+    
+    const knowledgeContext = this.errorKnowledgeBase.length > 0 
+      ? `\n// Avoid past mistakes:\n// ${this.errorKnowledgeBase.join('\n// ')}\n` 
+      : '';
+
+    return Promise.resolve(`
+// Auto-generated by MakerLog.ai SelfBuilder
+${knowledgeContext}
+export function execute() {
+  console.log("Executing generated module for: ${description}");
+  return true;
+}
+`);
+  }
+
+  public writeCode(path: string, code: string): boolean {
+    try {
+      const dir = join(path, '..');
+      if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+      writeFileSync(path, code, 'utf-8');
+      return true;
+    } catch (err) {
+      console.error(`[SelfBuilder] Error writing to ${path}:`, err);
+      return false;
+    }
+  }
+
+  public async testCode(path: string): Promise<{ pass: boolean; output: string }> {
+    try {
+      // Basic mock execution for testing
+      const command = `npx ts-node ${path}`;
+      const output = execSync(command, { timeout: 10000 }).toString('utf-8');
+      return { pass: true, output };
+    } catch (err: any) {
+      return { pass: false, output: err.stdout?.toString() || err.message };
+    }
+  }
+
+  public async fixErrors(filePath: string, errors: string[]): Promise<boolean> {
+    console.log(`[SelfBuilder] Attempting to auto-fix ${filePath}...`);
+    const code = readFileSync(filePath, 'utf-8');
+    const prompt = `Fix the following errors in this code:\nErrors: ${errors.join('\n')}\nCode:\n${code}`;
+    const fixedCode = await this.generateCode(prompt);
+    return this.writeCode(filePath, fixedCode);
+  }
+
+  public commitChanges(message: string): boolean {
+    try {
+      execSync('git add .', { cwd: this.repoRoot });
+      execSync(`git commit -m "${message}" --allow-empty`, { cwd: this.repoRoot });
+      return true;
+    } catch (err) {
+      console.error('[SelfBuilder] Commit failed:', err);
+      return false;
+    }
+  }
+
+  public getBuildHistory(): BuildResult[] {
+    return this.buildHistory;
+  }
+
+  public rollback(lastN: number = 1): boolean {
+    try {
+      execSync(`git reset --hard HEAD~${lastN}`, { cwd: this.repoRoot });
+      return true;
+    } catch (err) {
+      console.error('[SelfBuilder] Rollback failed:', err);
+      return false;
+    }
+  }
+
+  public getCapabilities(): string[] {
+    const capabilities: string[] = [];
+    const srcDir = join(this.repoRoot, 'src');
+    
+    if (!existsSync(srcDir)) return ['basic-reasoning'];
+
+    const scanDir = (dir: string) => {
+      const items = readdirSync(dir);
+      for (const item of items) {
+        const fullPath = join(dir, item);
+        if (statSync(fullPath).isDirectory()) {
+          scanDir(fullPath);
+        } else if (item.endsWith('.ts') || item.endsWith('.js')) {
+          capabilities.push(item.replace(/\.[^/.]+$/, ''));
+        }
+      }
+    };
+
+    scanDir(srcDir);
+    return capabilities.length > 0 ? capabilities : ['basic-reasoning'];
+  }
+
+  public identifyGaps(capabilities: string[], goal: string): string[] {
+    // Mock heuristic matching between goal string and existing files
+    const gaps: string[] = [];
+    const lowerGoal = goal.toLowerCase();
+    
+    const standardCapabilities = [
+      'auth-module', 'database-connect', 'api-handler', 'cron-scheduler', 'ai-integration'
+    ];
+
+    for (const cap of standardCapabilities) {
+      if (lowerGoal.includes(cap.split('-')[0]) && !capabilities.includes(cap)) {
+        gaps.push(cap);
+      }
+    }
+
+    if (gaps.length === 0) gaps.push('dynamic-feature-impl');
+    return gaps;
+  }
+
+  public learnFromError(error: string): void {
+    if (!this.errorKnowledgeBase.includes(error)) {
+      this.errorKnowledgeBase.push(error);
+    }
+  }
+
+  public getBuildStats(): { total: number; success: number; failed: number; avgDuration: number } {
+    const total = this.buildHistory.length;
+    const success = this.buildHistory.filter(b => b.success).length;
+    const failed = total - success;
+    const avgDuration = total > 0 
+      ? this.buildHistory.reduce((acc, b) => acc + b.duration, 0) / total 
+      : 0;
+
+    return { total, success, failed, avgDuration };
+  }
+}

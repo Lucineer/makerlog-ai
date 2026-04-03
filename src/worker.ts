@@ -24,6 +24,9 @@ function json(data: any, status = 200) {
 
 export default { async fetch(request: Request, env: any) {
   const url = new URL(request.url);
+  if (request.method === 'OPTIONS') {
+    return new Response(null, { headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type,Authorization' } });
+  }
 
   // Health with fleet metadata
   if (url.pathname === '/health') return json({ status: 'ok', repo: 'makerlog-ai', ...FLEET_META, timestamp: Date.now() });
@@ -31,7 +34,7 @@ export default { async fetch(request: Request, env: any) {
   // Seed route
   if (url.pathname === '/api/seed') return json(SEED);
 
-  if (url.pathname === '/setup') return new Response(generateSetupHTML('MakerLog', '#00d4ff'), { headers: { 'Content-Type': 'text/html' } });
+  if (url.pathname === '/setup') return new Response(generateSetupHTML('MakerLog', '#00d4ff'), { headers: { 'Content-Type': 'text/html;charset=utf-8', 'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*;" } });
   if (url.pathname === '/api/byok') { if (request.method === 'POST') { const d = await request.json(); env.MAKERLOG_KV?.put('byok-config', JSON.stringify(d)); return json({ ok: true }); } const c = await env.MAKERLOG_KV?.get('byok-config'); return new Response(c || '{}', { headers: { 'Content-Type': 'application/json' } }); }
 
   // Chat with confidence scoring and memory persistence
@@ -57,5 +60,6 @@ export default { async fetch(request: Request, env: any) {
   }
 
   if (url.pathname.startsWith('/public/')) { const kv = await env.MAKERLOG_KV?.get('public:' + url.pathname, 'arrayBuffer'); if (kv) return new Response(kv, { headers: { 'Content-Type': url.pathname.endsWith('.png') ? 'image/png' : 'image/jpeg' } }); }
-  return new Response(indexHTML, { headers: { 'Content-Type': 'text/html' } });
+  return new Response('{"error":"Not Found"}', { status: 404, headers: { 'Content-Type': 'application/json' } });
+  // return new Response(indexHTML, { headers: { 'Content-Type': 'text/html;charset=utf-8', 'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*;" } });
 }};

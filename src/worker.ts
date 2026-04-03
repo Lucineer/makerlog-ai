@@ -52,6 +52,7 @@ export default { async fetch(request: Request, env: any) {
   }
 
   // Health with fleet metadata
+    if (url.pathname === '/api/efficiency') return json({ totalCached: 0, totalHits: 0, cacheHitRate: 0, tokensSaved: 0, repo: 'makerlog-ai', timestamp: Date.now() });
   if (url.pathname === '/health') return json({ status: 'ok', repo: 'makerlog-ai', ...FLEET_META, timestamp: Date.now() });
 
   // Seed route

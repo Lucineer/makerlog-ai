@@ -1,3 +1,5 @@
+import { selectModel } from './lib/model-router.js';
+import { trackConfidence, getConfidence } from './lib/confidence-tracker.js';
 import { loadBYOKConfig, callLLM, generateSetupHTML } from './lib/byok.js';
 import { softActualize, confidenceScore } from './lib/soft-actualize.js';
 import { deadbandCheck, deadbandStore, getEfficiencyStats } from './lib/deadband.js';
@@ -60,7 +62,10 @@ export default { async fetch(request: Request, env: any) {
     const body = await request.json();
     const messages = body.messages || [];
     const confidence = confidenceScore(messages[messages.length - 1]?.content || '', true, !!config);
-    const r = await softActualize(() => callLLM(config, messages, { system: SEED.systemPrompt }), { content: 'I could not generate a response.', ok: false }, 'callLLM');
+    const userMessage = messages.map((m: any) => m.content || '').join(' ');
+    const cached = await deadbandCheck(env, userMessage);
+    let r;
+    if (cached) { r = { content: cached, ok: true }; } else { r = await softActualize(() => callLLM(config, messages, { system: SEED.systemPrompt }), { content: 'I could not generate a response.', ok: false }, 'callLLM'); await deadbandStore(env, userMessage, r.content); }
 
     // Persist conversation summary to KV
     if (body.sessionId && env.MAKERLOG_KV) {
@@ -78,6 +83,10 @@ export default { async fetch(request: Request, env: any) {
   if (url.pathname === '/') return new Response(indexHTML, { headers: { 'Content-Type': 'text/html;charset=utf-8', 'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*;" } });
 
   if (url.pathname.startsWith('/public/')) { const kv = await env.MAKERLOG_KV?.get('public:' + url.pathname, 'arrayBuffer'); if (kv) return new Response(kv, { headers: { 'Content-Type': url.pathname.endsWith('.png') ? 'image/png' : 'image/jpeg' } }); }
-  return new Response('{"error":"Not Found"}', { status: 404, headers: { 'Content-Type': 'application/json' } });
+  if (url.pathname === '/api/confidence') {
+      const scores = await getConfidence(env);
+      return new Response(JSON.stringify(scores), { headers: jsonHeaders });
+    }
+    return new Response('{"error":"Not Found"}' , { status: 404, headers: { 'Content-Type': 'application/json' } });
   // return new Response(indexHTML, { headers: { 'Content-Type': 'text/html;charset=utf-8', 'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*;" } });
 }};

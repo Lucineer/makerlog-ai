@@ -1,5 +1,7 @@
 import { loadBYOKConfig, callLLM, generateSetupHTML } from './lib/byok.js';
 import { softActualize, confidenceScore } from './lib/soft-actualize.js';
+import { deadbandCheck, deadbandStore, getEfficiencyStats } from './lib/deadband.js';
+import { logResponse } from './lib/response-logger.js';
 
 const FLEET_META = { version: '1.1.0', agentCount: 1, modules: ['byok', 'chat', 'seed'], seedVersion: '2024.04' };
 

@@ -109,7 +109,7 @@ export default { async fetch(request: Request, env: any) {
   }
   if (url.pathname === '/api/confidence') {
       const scores = await getConfidence(env);
-      return new Response(JSON.stringify(scores), { headers: jsonHeaders });
+      return new Response(JSON.stringify(scores), { headers: { 'Content-Type': 'application/json' } });
     }
     return new Response('{"error":"Not Found"}' , { status: 404, headers: { 'Content-Type': 'application/json' } });
   // return new Response(indexHTML, { headers: { 'Content-Type': 'text/html;charset=utf-8', 'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*;" } });

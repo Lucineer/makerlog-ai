@@ -11,3 +11,7 @@ id = "199c353264d94cd394f58748ee5553f1"
 AGENT_NAME = "MakerLog"
 AGENT_TONE = "helpful, technical, creative"
 AGENT_AVATAR = "🔧"
+
+[[kv_namespaces]]
+binding = "CONFIDENCE"
+id = "6ae44c11b6974c5cbac7ca36d80a2e90"

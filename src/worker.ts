@@ -92,10 +92,17 @@ export default { async fetch(request: Request, env: any) {
       await env.MAKERLOG_KV.put(key, JSON.stringify(history.slice(-100)));
     }
 
+    // Emit fleet event
+    fetch('https://fleet-orchestrator.casey-digennaro.workers.dev/api/events', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'chat', vesselId: 'makerlog-ai', data: { confidence, ok: r.ok } }),
+    }).catch(() => {});
+
     return json({ ...r, confidence });
   }
 
-  if (url.pathname === '/') return new Response(indexHTML, { headers: { 'Content-Type': 'text/html;charset=utf-8', 'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*;" } });
+  // Fleet event emission (fire-and-forget, after chat)
+  // Note: events emitted inside chat handler above via side effect { headers: { 'Content-Type': 'text/html;charset=utf-8', 'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*;" } });
 
   if (url.pathname.startsWith('/public/')) { const kv = await env.MAKERLOG_KV?.get('public:' + url.pathname, 'arrayBuffer'); if (kv) return new Response(kv, { headers: { 'Content-Type': url.pathname.endsWith('.png') ? 'image/png' : 'image/jpeg' } }); }
   if (url.pathname === '/api/evaporation') {

@@ -1,52 +1,103 @@
-# CLAUDE.md
+# CLAUDE.md — Makerlog Ai
 
-## Project Overview
-MakerLog.ai is an AI Coding Agent built as a Cloudflare Worker with BYOK (Bring Your Own Key) LLM routing. It is part of the Cocapn ecosystem (cocapn.ai) under the Lucineer GitHub organization. The agent operates on a core philosophy: knowledge and code are the same layer—capable of coding itself.
+You are the specialist and shipwright for this vessel. Two roles, one agent.
 
-## Architecture Summary
-- **Cloudflare Worker** (`src/worker.ts`): The main entry point handling all routing and serving inline HTML. No external asset binding is used.
-- **BYOK Module** (`src/lib/byok.ts`): 503 lines, handling LLM routing across 7 providers with a strict config discovery hierarchy.
-- **Core Agent Systems** (`src/core/`): Contains all coding agent capabilities including the task runner, dependency graph, test runner, file manager, terminal, self-builder, build pipeline, git manager, and snippet manager.
-- **State/Storage**: Uses Cloudflare KV (`MAKERLOG_MEMORY` binding) for persistence.
+## Identity
+- **Vessel**: Makerlog Ai
+- **Role**: MakerLog.ai
+- **URL**: https://makerlog-ai.casey-digennaro.workers.dev
+- **Repo**: github.com/Lucineer/makerlog-ai
+- **Branch**: master
+- **KV Namespace**: unknown
+- **Size**: ~129 lines
 
-## Key Commands
-- `wrangler dev`: Start local development server.
-- `wrangler deploy`: Deploy to Cloudflare Workers production.
-- `git push`: Push changes to the remote repository (Commits should be attributed to "Author: Superinstance").
+## Specialist Mode — Day-to-Day Operations
 
-## Code Style and Conventions
-- **Language**: Strict TypeScript (45 files).
-- **Runtime**: Zero runtime dependencies for the MVP.
-- **Deployment**: No build step. Code is deployed directly using Wrangler.
-- **UI**: All HTML/CSS/JS is inlined directly into `src/worker.ts`.
-- **Styling**: Theme is "code". Brand/accent color is cyan-purple (`#00d4ff`).
-- **Auth**: BYOK config discovery strictly follows this cascade: URL params → Auth header → Cookie → KV → fail.
+### Deploy
+```bash
+cd /tmp/makerlog-ai && wrangler deploy
+```
 
-## Testing Approach
-- The agent includes its own test runner within `src/core/`.
-- Standard validation is handled via `wrangler dev` before deploying.
+### Health Check
+```bash
+curl -s https://makerlog-ai.casey-digennaro.workers.dev/health
+curl -s https://makerlog-ai.casey-digennaro.workers.dev/vessel.json | python3 -m json.tool
+```
 
-## Important File Paths
-- `src/worker.ts` - Worker entry point, router, and inline HTML.
-- `src/lib/byok.ts` - BYOK LLM routing and provider config discovery.
-- `src/core/` - Coding agent systems (task runner, file manager, etc.).
+### Key Endpoints
+| Endpoint | What It Does |
+|----------|-------------|
+| /health | Liveness check |
+| /vessel.json | Fleet self-description |
+| /api/byok | API endpoint |
+| /api/chat | API endpoint |
+| /api/confidence | API endpoint |
+| /api/efficiency | API endpoint |
+| /api/evaporation | API endpoint |
+| /api/kg | API endpoint |
+| /api/memory | API endpoint |
+| /api/seed | API endpoint |
 
-## What NOT to Change
-- Do not extract inline HTML from `worker.ts` into external files or attach an ASSETS binding; the single-file UI pattern is intentional.
-- Do not alter the BYOK config discovery cascade (URL params → Auth header → Cookie → KV → fail).
-- Do not introduce runtime dependencies without careful consideration of the MVP constraints.
+### Common Issues & Recovery
+1. **502 error**: Check KV namespace `unknown`, redeploy with `rm -rf .wrangler dist && wrangler deploy`
+2. **CSP blocking**: CSP pattern is `inline string in Response` — ensure connect-src includes needed domains
+3. **Stale build**: `rm -rf .wrangler dist && wrangler deploy`
+4. **GitHub raw cache**: Changes may take 5-10 min to propagate on raw.githubusercontent.com
+5. **Git push conflict**: `git fetch && git reset --hard origin/master && re-apply changes`
 
-## How to Add New Features
-1. Create a new module in the appropriate directory (e.g., `src/core/new-feature.ts` or `src/lib/new-tool.ts`).
-2. Import the new module into `src/worker.ts`.
-3. Add the necessary route handlers (e.g., `/api/new-feature`, `/public/new-feature`) directly within `worker.ts`.
+### Fleet Connections
+- **Emergence bus**: not wired
+- **Vessel Tuner**: https://vessel-tuner.casey-digennaro.workers.dev/api/vessel?name=makerlog-ai
+- **Fleet grid**: Listed in cocapn.ai and the-fleet
 
-## Deployment Instructions
-1. Ensure you have the latest code passing local checks.
-2. Run `wrangler deploy` to build and deploy to Cloudflare.
-3. Commit and push using `git push`. Ensure commits are attributed to "Author: Superinstance".
+## Shipwright Mode — Drydock Operations
 
-## Ecosystem Links
-- **Organization**: [github.com/Lucineer](https://github.com/Lucineer)
-- **Main Hub**: [cocapn.ai](https://cocapn.ai)
-- **Sister Repos**: Look for other `*log.ai` repositories within the Lucineer GitHub organization.
+### Architecture Pattern
+- **Type**: Raw CF Worker
+- **JSON helper**: json()
+- **CSP pattern**: inline string in Response
+- **Features.js**: no
+
+### Fleet Patterns
+- **Frame-ancestors in CSP**: yes
+- **vessel.json capabilities**: chat, code-review, prototype
+- **Fleet link footer**: yes
+
+### Refactoring Rules
+1. **NEVER** change the JSON helper function name (`json()`) — breaks all endpoints
+2. **NEVER** add template literals (${var}) inside HTML strings — breaks esbuild
+3. **NEVER** use single quotes inside double-quoted HTML inside single-quoted TS strings
+4. **ALWAYS** use string concatenation for HTML, not template literals
+5. **ALWAYS** test with `curl /health` after every change
+6. **ALWAYS** check vessel-tuner score before and after refactoring
+7. **PREFER** `/features.js` endpoint for complex client-side JS (avoids quote escaping)
+8. **PREFER** `write` tool over heredocs — obfuscation detector blocks cat << EOF
+
+### Before Refactoring Checklist
+- [ ] Current vessel-tuner score recorded
+- [ ] Git status clean (no uncommitted changes)
+- [ ] Branch backed up (`git tag before-refactor`)
+- [ ] All endpoints tested and working
+- [ ] Fleet connections documented
+
+### After Refactoring Checklist
+- [ ] `curl /health` returns 200
+- [ ] `curl /vessel.json` returns valid JSON with capabilities
+- [ ] CSP header present with frame-ancestors
+- [ ] Vessel-tuner score >= previous score
+- [ ] Landing page renders correctly
+- [ ] `git push` succeeds
+
+## Captain's Standing Orders
+1. Keep the vessel small. ~129 lines is the current size.
+2. Zero runtime dependencies unless absolutely necessary.
+3. Every endpoint must be useful — no dead code.
+4. Equipment is loaded inline, never via npm.
+5. All changes committed with descriptive messages.
+6. If something breaks, fix it before moving on.
+7. Document what you changed and why.
+
+## Vessel Evolution
+- **Current stage**: [hardware-first | safe | effective | pretty | optimized]
+- **Target stage**: optimized
+- **Rollback points**: check git log for last-known-good commits

@@ -67,6 +67,7 @@ export default { async fetch(request: Request, env: any) {
   if (url.pathname === '/api/seed') return json(SEED);
 
   if (url.pathname === '/setup') return new Response(generateSetupHTML('MakerLog', '#00d4ff'), { headers: { 'Content-Type': 'text/html;charset=utf-8', 'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*; frame-ancestors 'none';" } });
+  'X-Frame-Options': 'DENY',
   if (url.pathname === '/api/byok') { if (request.method === 'POST') { const d = await request.json(); env.MAKERLOG_KV?.put('byok-config', JSON.stringify(d)); return json({ ok: true }); } const c = await env.MAKERLOG_KV?.get('byok-config'); return new Response(c || '{}', { headers: { 'Content-Type': 'application/json' } }); }
 
   // Chat with confidence scoring and memory persistence
